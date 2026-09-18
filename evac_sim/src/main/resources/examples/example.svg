@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"
+     data-scale="0.02" data-floor="1">
+
+    <!-- Комнаты -->
+    <rect data-type="room" data-id="R1" data-name="Офис 101" data-capacity="20"
+          x="10" y="10" width="150" height="100" fill="#eef" stroke="#333"/>
+
+    <rect data-type="room" data-id="R2" data-name="Офис 102" data-capacity="15"
+          x="240" y="10" width="150" height="100" fill="#eef" stroke="#333"/>
+
+    <!-- Коридор -->
+    <rect data-type="corridor" data-id="C1" data-capacity="60"
+          x="10" y="120" width="380" height="40" fill="#ffe" stroke="#333"/>
+
+    <!-- Двери: соединяют комнату и коридор -->
+    <line data-type="door" data-id="D1" data-connects="R1,C1" data-throughput="1.2" data-width="0.9"
+          x1="80" y1="110" x2="80" y2="120" stroke="#900" stroke-width="4"/>
+
+    <line data-type="door" data-id="D2" data-connects="R2,C1" data-throughput="1.2" data-width="0.9"
+          x1="310" y1="110" x2="310" y2="120" stroke="#900" stroke-width="4"/>
+
+    <!-- Аварийный выход из коридора наружу -->
+    <line data-type="exit" data-id="E1" data-connects="C1,OUTSIDE" data-throughput="2.5" data-width="1.5"
+          x1="10" y1="140" x2="0" y2="140" stroke="#0a0" stroke-width="6"/>
+
+    <!-- Пример лестницы на 2-й этаж (для будущей многоэтажной модели) -->
+    <rect data-type="stairs" data-id="S1" data-connects="C1@1,C1@2" data-throughput="1.0" data-direction="both"
+          x="180" y="120" width="40" height="40" fill="#dfd" stroke="#333"/>
+</svg>
