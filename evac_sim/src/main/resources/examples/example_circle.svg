@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="800" height="600" viewBox="0 0 800 600"
+     data-scale="0.02" data-floor="1">
+
+    <!-- Коридор -->
+    <rect x="50" y="250" width="700" height="100"
+          data-type="corridor" data-id="C1"
+          data-capacity="15" data-width="2.0"
+          fill="#fdfde0" stroke="#555" stroke-width="2"/>
+
+    <!-- Круглая аудитория: площадь πr², bbox даст квадрат 2r × 2r -->
+    <circle cx="400" cy="150" r="100"
+            data-type="room" data-id="R_round"
+            data-capacity="30" data-area="31.4" data-name="Круглая аудитория"
+            fill="#e6e6fa" stroke="#555" stroke-width="2"/>
+
+    <!-- Эллиптический холл -->
+    <ellipse cx="400" cy="450" rx="150" ry="80"
+             data-type="room" data-id="R_ellipse"
+             data-capacity="15" data-area="37.7" data-name="Эллипс-холл"
+             fill="#e6e6fa" stroke="#555" stroke-width="2"/>
+
+    <!-- Двери -->
+    <line x1="400" y1="250" x2="400" y2="280" data-type="door" data-id="D1"
+          data-connects="R_round,C1" data-width="1.2"
+          stroke="#c00" stroke-width="6"/>
+    <line x1="400" y1="320" x2="400" y2="370" data-type="door" data-id="D2"
+          data-connects="R_ellipse,C1" data-width="1.2"
+          stroke="#c00" stroke-width="6"/>
+
+    <!-- Выход -->
+    <line x1="50" y1="280" x2="50" y2="320" data-type="exit" data-id="E1"
+          data-connects="C1,OUTSIDE" data-throughput="2.0" data-width="1.2"
+          stroke="#2a2" stroke-width="8"/>
+</svg>

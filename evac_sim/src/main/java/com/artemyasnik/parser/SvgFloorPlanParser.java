@@ -15,9 +15,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 
 /**
  * Разбирает SVG-план по соглашению data-* атрибутов (см. FORMAT_SPEC.md):
@@ -51,8 +51,8 @@ public class SvgFloorPlanParser {
         FloorPlan floorPlan = new FloorPlan(floorNumber, scale);
 
         NodeList all = root.getElementsByTagName("*");
-        // Сначала комнаты и коридоры (узлы), затем связи — чтобы можно было
-        // валидировать data-connects по уже собранным узлам.
+        // Сначала комнаты и коридоры (узлы), затем связи — чтобы валидировать
+        // data-connects по уже собранным узлам.
         List<Element> nodeElements = new ArrayList<>();
         List<Element> connectorElements = new ArrayList<>();
 
@@ -91,16 +91,36 @@ public class SvgFloorPlanParser {
 
         if (t == FloorElementType.ROOM) {
             int capacity = (int) parseDouble(el.getAttribute("data-capacity"), 0);
-            double area = el.hasAttribute("data-area")
-                    ? parseDouble(el.getAttribute("data-area"), 0)
-                    : bbox.width() * bbox.height() * scale * scale;
+
+            double area;
+            if (el.hasAttribute("data-area")) {
+                area = parseDouble(el.getAttribute("data-area"), 0);
+            } else {
+                if (bbox.width() == 0 || bbox.height() == 0) {
+                    throw new IllegalArgumentException(
+                            "Комната '" + id + "' имеет нулевую площадь по bbox "
+                                    + "(width=" + bbox.width() + ", height=" + bbox.height() + "). "
+                                    + "Либо задай data-area явно, либо нарисуй невырожденную геометрию.");
+                }
+                area = bbox.width() * bbox.height() * scale * scale;
+            }
             String name = el.hasAttribute("data-name") ? el.getAttribute("data-name") : id;
             plan.addRoom(new Room(id, geometry, raw, capacity, area, name));
+
         } else { // CORRIDOR
             int capacity = (int) parseDouble(el.getAttribute("data-capacity"), 0);
-            double width = el.hasAttribute("data-width")
-                    ? parseDouble(el.getAttribute("data-width"), 0)
-                    : bbox.shorterSide() * scale;
+
+            double width;
+            if (el.hasAttribute("data-width")) {
+                width = parseDouble(el.getAttribute("data-width"), 0);
+            } else {
+                if (bbox.width() == 0 && bbox.height() == 0) {
+                    throw new IllegalArgumentException(
+                            "Коридор '" + id + "' имеет нулевую геометрию по bbox — "
+                                    + "нельзя вычислить ширину. Задай data-width явно.");
+                }
+                width = bbox.shorterSide() * scale;
+            }
             plan.addCorridor(new Corridor(id, geometry, raw, capacity, width));
         }
     }
@@ -118,19 +138,38 @@ public class SvgFloorPlanParser {
         String connectsRaw = requireAttr(el, "data-connects");
         List<String> connects = Arrays.stream(connectsRaw.split(","))
                 .map(String::trim)
+                .filter(s -> !s.isEmpty())
                 .toList();
 
         double throughput = parseDouble(el.getAttribute("data-throughput"), 1.0);
-        Double width = el.hasAttribute("data-width")
-                ? parseDouble(el.getAttribute("data-width"), 0)
-                : (bbox.width() > 0 || bbox.height() > 0 ? bbox.shorterSide() * plan.getScaleMetersPerUnit() : null);
+
+        // ВАЖНО: width — это Double (может быть null), поэтому ветвление
+        // делаем явным if/else. Тернарник с null и примитивом приводит
+        // к авто-unboxing и NullPointerException.
+        Double width;
+        if (el.hasAttribute("data-width")) {
+            width = parseDouble(el.getAttribute("data-width"), 0);
+        } else {
+            width = widthFromGeometry(geometry, bbox, plan.getScaleMetersPerUnit());
+            if (width == null) {
+                throw new IllegalArgumentException(
+                        "Связь '" + id + "' (" + t + ") имеет нулевую геометрию: "
+                                + "bbox = [" + bbox.minX() + ".." + bbox.maxX() + "] x ["
+                                + bbox.minY() + ".." + bbox.maxY() + "]. "
+                                + "Нарисуй отрезок ненулевой длины "
+                                + "(например, <line x1=\"280\" y1=\"50\" x2=\"320\" y2=\"50\"/>) "
+                                + "либо задай data-width явно.");
+            }
+        }
 
         switch (t) {
             case DOOR -> plan.addDoor(new Door(id, geometry, raw, connects, throughput, width));
             case EXIT -> plan.addExit(new EmergencyExit(id, geometry, raw, connects, throughput, width));
             case STAIRS -> {
-                int[] floors = parseStairFloors(connects);
-                String direction = el.hasAttribute("data-direction") ? el.getAttribute("data-direction") : "both";
+                int[] floors = parseStairFloors(id, connects);
+                String direction = el.hasAttribute("data-direction")
+                        ? el.getAttribute("data-direction")
+                        : "both";
                 plan.addStairs(new Stairs(id, geometry, raw, connects, throughput, width,
                         floors[0], floors[1], direction));
             }
@@ -138,14 +177,64 @@ public class SvgFloorPlanParser {
         }
     }
 
-    private int[] parseStairFloors(List<String> connects) {
-        // ожидается формат "baseId@floor", например "C1@1"
-        int[] result = new int[]{1, 2};
+    /**
+     * Вычисляет ширину связи по геометрии, если {@code data-width} не задан.
+     * <p>
+     * Правила:
+     * <ul>
+     *     <li><b>Отрезок</b> (ровно 2 точки) — берём евклидову длину отрезка.
+     *         Это относится к {@code <line>} и {@code <polyline>} из двух точек:
+     *         дверь/выход/лестница нарисованы как отрезок поперёк стены, и его
+     *         длина и есть ширина проёма.</li>
+     *     <li><b>Полигон/прямоугольник</b> — меньшая сторона bbox (толщина).</li>
+     * </ul>
+     * Возвращает {@code null}, если геометрия вырождена (нельзя вычислить
+     * ни длину, ни меньшую сторону).
+     *
+     * @param geometry контур в единицах SVG
+     * @param bbox     bbox этого контура
+     * @param scale    метров на единицу SVG
+     * @return ширина в метрах или {@code null}, если вычислить нельзя
+     */
+    private Double widthFromGeometry(List<Point2D> geometry, BoundingBox bbox, double scale) {
+        // 1. Отрезок из двух точек — длина отрезка.
+        if (geometry.size() == 2) {
+            Point2D a = geometry.get(0);
+            Point2D b = geometry.get(1);
+            double length = Math.hypot(b.x() - a.x(), b.y() - a.y());
+            if (length > 0) {
+                return length * scale;
+            }
+        }
+        // 2. Прямоугольник / полигон — меньшая сторона bbox.
+        if (bbox.width() > 0 && bbox.height() > 0) {
+            return bbox.shorterSide() * scale;
+        }
+        // 3. Вырожденная геометрия.
+        return null;
+    }
+
+    /**
+     * Разбирает этажи из data-connects лестницы. Ожидается формат
+     * {@code "baseId@floor,baseId@floor"}, например {@code "C1@1,C1@2"}.
+     * Если хотя бы у одного id нет суффикса {@code @floor} — бросаем
+     * исключение, чтобы не маскировать ошибку дефолтом.
+     */
+    private int[] parseStairFloors(String id, List<String> connects) {
+        int[] result = new int[]{-1, -1};
         for (int i = 0; i < Math.min(2, connects.size()); i++) {
             String part = connects.get(i);
             int at = part.indexOf('@');
-            if (at >= 0) {
+            if (at < 0 || at == part.length() - 1) {
+                throw new IllegalArgumentException(
+                        "Лестница '" + id + "' должна задавать этажи в формате baseId@floor, "
+                                + "например data-connects=\"C1@1,C1@2\". Получено: '" + part + "'");
+            }
+            try {
                 result[i] = Integer.parseInt(part.substring(at + 1).trim());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                        "Лестница '" + id + "': не удалось разобрать номер этажа из '" + part + "'", e);
             }
         }
         return result;
@@ -163,7 +252,8 @@ public class SvgFloorPlanParser {
             case "polyline", "polygon" -> polyPoints(el);
             case "path" -> SvgPathParser.parse(el.getAttribute("d"));
             default -> throw new IllegalArgumentException(
-                    "Тег <" + tag + "> не поддерживается для элементов плана (id=" + el.getAttribute("data-id") + ")");
+                    "Тег <" + tag + "> не поддерживается для элементов плана (id="
+                            + el.getAttribute("data-id") + ")");
         };
     }
 
@@ -231,7 +321,8 @@ public class SvgFloorPlanParser {
     private String requireAttr(Element el, String name) {
         if (!el.hasAttribute(name) || el.getAttribute(name).isBlank()) {
             throw new IllegalArgumentException(
-                    "Отсутствует обязательный атрибут " + name + " у элемента <" + el.getTagName() + ">");
+                    "Отсутствует обязательный атрибут " + name
+                            + " у элемента <" + el.getTagName() + ">");
         }
         return el.getAttribute(name);
     }

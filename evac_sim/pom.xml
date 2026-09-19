@@ -21,24 +21,6 @@
         </dependency>
     </dependencies>
     <build>
-        <resources>
-            <!--  Стандартный каталог ресурсов.  -->
-            <resource>
-                <directory>src/main/resources</directory>
-            </resource>
-            <!--
-                    ВРЕМЕННЫЙ КОСТЫЛЬ: examples/example.svg сейчас лежит внутри src/main/java.
-                    Maven оттуда не-.java файлы не копирует, поэтому добавляем src/main/java
-                    как источник ресурсов, но забираем ТОЛЬКО *.svg (исходники в JAR не попадут).
-                    Правильнее — перенести файл в src/main/resources/examples/example.svg
-                    и удалить этот блок целиком.
-                   -->
-        </resources>
-        <testResources>
-            <testResource>
-                <directory>src/test/resources</directory>
-            </testResource>
-        </testResources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="800" height="600" viewBox="0 0 800 600"
+     data-scale="0.02" data-floor="1">
+
+    <!-- Коридор -->
+    <rect x="50" y="250" width="700" height="100"
+          data-type="corridor" data-id="C1"
+          data-capacity="10" data-width="2.0"
+          fill="#fdfde0" stroke="#555" stroke-width="2"/>
+
+    <!-- Зал с эркером: Q-сегмент не парсится, data-area обязателен -->
+    <path d="M 200 50 L 600 50 Q 700 150 600 250 L 200 250 Q 100 150 200 50 Z"
+          data-type="room" data-id="R_hall"
+          data-capacity="40" data-area="85.5" data-name="Зал с эркером"
+          fill="#e6e6fa" stroke="#555" stroke-width="2"/>
+
+    <!-- Дверь -->
+    <line x1="350" y1="250" x2="450" y2="250" data-type="door" data-id="D1"
+          data-connects="R_hall,C1"
+          data-throughput="2.0" data-width="1.5"
+          stroke="#c00" stroke-width="6"/>
+
+    <!-- Выход -->
+    <line x1="50" y1="280" x2="50" y2="320" data-type="exit" data-id="E1"
+          data-connects="C1,OUTSIDE" data-throughput="2.0" data-width="1.2"
+          stroke="#2a2" stroke-width="8"/>
+</svg>

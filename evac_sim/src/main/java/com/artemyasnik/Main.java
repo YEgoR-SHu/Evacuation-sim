@@ -7,6 +7,7 @@ import com.artemyasnik.parser.SvgFloorPlanParser;
 
 import java.io.File;
 import java.io.InputStream;
+import java.util.List;
 
 public class Main {
 
@@ -16,12 +17,13 @@ public class Main {
     public static void main(String[] args) throws Exception {
         FloorPlan plan = loadPlan(args);
 
-        System.out.println("Этаж " + plan.getFloorNumber() + ", масштаб " + plan.getScaleMetersPerUnit() + " м/ед.");
+        System.out.println("Этаж " + plan.getFloorNumber() + ", масштаб "
+                + plan.getScaleMetersPerUnit() + " м/ед.");
         System.out.println();
 
         System.out.println("Комнаты:");
         for (Room r : plan.getRooms().values()) {
-            System.out.printf("  %-4s %-12s вместимость=%-4d площадь=%.1f м²%n",
+            System.out.printf("  %-4s %-14s вместимость=%-4d площадь=%.1f м²%n",
                     r.getId(), r.getName(), r.getCapacity(), r.getAreaSqM());
         }
 
@@ -45,8 +47,9 @@ public class Main {
 
         System.out.println("Лестницы:");
         for (Stairs s : plan.getStairs()) {
-            System.out.printf("  %-4s этаж %d -> %d, пропускная способность=%.2f чел/с%n",
-                    s.getId(), s.getFloorFrom(), s.getFloorTo(), s.getThroughput());
+            System.out.printf("  %-4s этаж %d -> %d, направление=%s, пропускная способность=%.2f чел/с%n",
+                    s.getId(), s.getFloorFrom(), s.getFloorTo(),
+                    s.getDirection(), s.getThroughput());
         }
 
         System.out.println();
@@ -60,23 +63,53 @@ public class Main {
     }
 
     /**
-     * Загружает план: если передан аргумент — читает файл с диска,
-     * иначе берёт встроенный пример с classpath.
+     * Загружает план. Порядок поиска:
+     * <ol>
+     *     <li>Если передан аргумент и он указывает на существующий файл на диске — читаем файл.</li>
+     *     <li>Если передан аргумент и он не файл — пробуем найти его как ресурс на classpath
+     *         (например, {@code examples/example_office.svg} или {@code /examples/example_office.svg}).</li>
+     *     <li>Если аргументов нет — берём встроенный пример {@link #DEFAULT_RESOURCE}.</li>
+     * </ol>
+     *
+     * @param args аргументы командной строки; {@code args[0]} — путь к файлу или
+     *             имя ресурса на classpath
+     * @return разобранный план этажа
+     * @throws Exception если план не найден или не может быть разобран
      */
     private static FloorPlan loadPlan(String[] args) throws Exception {
         SvgFloorPlanParser parser = new SvgFloorPlanParser();
 
         if (args.length > 0) {
-            File file = new File(args[0]);
-            if (!file.isFile()) {
-                throw new IllegalArgumentException(
-                        "Файл не найден: " + file.getAbsolutePath());
+            String source = args[0];
+
+            // 1. Пробуем как файл на диске — с относительным или абсолютным путём.
+            File file = new File(source);
+            if (file.isFile()) {
+                System.out.println("Источник: файл " + file.getAbsolutePath());
+                System.out.println();
+                return parser.parse(file);
             }
-            System.out.println("Источник: " + file.getAbsolutePath());
-            System.out.println();
-            return parser.parse(file);
+
+            // 2. Пробуем как ресурс на classpath.
+            String resourcePath = source.startsWith("/") ? source : "/" + source;
+            try (InputStream is = Main.class.getResourceAsStream(resourcePath)) {
+                if (is != null) {
+                    System.out.println("Источник: ресурс " + resourcePath);
+                    System.out.println();
+                    return parser.parse(is);
+                }
+            }
+
+            // 3. Ничего не нашли — падаем с понятным сообщением.
+            throw new IllegalArgumentException(
+                    "Не найден ни файл, ни ресурс: '" + source + "'.\n"
+                            + "  — как файл: " + file.getAbsolutePath() + "\n"
+                            + "  — как ресурс: " + resourcePath + "\n"
+                            + "Убедись, что файл существует, или укажи имя примера из "
+                            + "src/main/resources/examples/ (например: examples/example_office.svg).");
         }
 
+        // 4. Ничего не передано — берём встроенный пример.
         try (InputStream is = Main.class.getResourceAsStream(DEFAULT_RESOURCE)) {
             if (is == null) {
                 throw new IllegalStateException(

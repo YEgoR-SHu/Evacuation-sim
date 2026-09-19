@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="800" height="600" viewBox="0 0 800 600"
+     data-scale="0.02" data-floor="1">
+
+    <!-- Коридор -->
+    <rect x="100" y="300" width="600" height="80"
+          data-type="corridor" data-id="C1"
+          data-capacity="15" data-width="1.6"
+          fill="#fdfde0" stroke="#555" stroke-width="2"/>
+
+    <!-- Гостиная -->
+    <rect x="100" y="100" width="300" height="200"
+          data-type="room" data-id="R1" data-capacity="8" data-name="Гостиная"
+          fill="#e6e6fa" stroke="#555" stroke-width="2"/>
+
+    <!-- Кухня -->
+    <rect x="400" y="100" width="300" height="200"
+          data-type="room" data-id="R2" data-capacity="4" data-name="Кухня"
+          fill="#e6e6fa" stroke="#555" stroke-width="2"/>
+
+    <!-- Спальня -->
+    <rect x="100" y="380" width="300" height="180"
+          data-type="room" data-id="R3" data-capacity="6" data-name="Спальня"
+          fill="#e6e6fa" stroke="#555" stroke-width="2"/>
+
+    <!-- Лестничная клетка (комната с лестницей) -->
+    <rect x="400" y="380" width="300" height="180"
+          data-type="room" data-id="S_cell1" data-capacity="5" data-name="Лестница"
+          fill="#e6e6fa" stroke="#555" stroke-width="2"/>
+
+    <!-- Двери -->
+    <line x1="150" y1="300" x2="250" y2="300" data-type="door" data-id="D1"
+          data-connects="R1,C1" data-width="0.9" stroke="#c00" stroke-width="6"/>
+    <line x1="500" y1="300" x2="600" y2="300" data-type="door" data-id="D2"
+          data-connects="R2,C1" data-width="0.9" stroke="#c00" stroke-width="6"/>
+    <line x1="150" y1="380" x2="250" y2="380" data-type="door" data-id="D3"
+          data-connects="R3,C1" data-width="0.9" stroke="#c00" stroke-width="6"/>
+    <line x1="500" y1="380" x2="600" y2="380" data-type="door" data-id="D4"
+          data-connects="S_cell1,C1" data-width="1.0" stroke="#c00" stroke-width="6"/>
+
+    <!-- Аварийный выход из коридора -->
+    <line x1="100" y1="320" x2="100" y2="360" data-type="exit" data-id="E1"
+          data-connects="C1,OUTSIDE" data-throughput="2.0" data-width="1.2"
+          stroke="#2a2" stroke-width="8"/>
+
+    <!-- Лестница на этаж 2: id узлов в формате baseId@floor -->
+    <line x1="550" y1="470" x2="650" y2="470" data-type="stairs" data-id="ST1"
+          data-connects="S_cell1@1,S_cell1@2"
+          data-direction="both" data-width="1.2" data-throughput="1.5"
+          stroke="#06c" stroke-width="8"/>
+</svg>

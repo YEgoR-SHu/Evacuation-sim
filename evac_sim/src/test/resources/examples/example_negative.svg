@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="400" height="300" viewBox="0 0 400 300"
+     data-scale="0.02" data-floor="1">
+
+    <!-- Комната без data-capacity (парсер даст 0) -->
+    <rect x="50" y="50" width="150" height="100"
+          data-type="room" data-id="R_no_capacity"
+          fill="#e6e6fa" stroke="#555"/>
+
+    <!-- Дверь с одним id вместо двух — Connector бросит IllegalArgumentException -->
+    <line x1="200" y1="150" x2="200" y2="200" data-type="door" data-id="D_one"
+          data-connects="R_no_capacity"
+          stroke="#c00" stroke-width="6"/>
+</svg>

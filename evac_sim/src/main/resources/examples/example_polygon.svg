@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="800" height="600" viewBox="0 0 800 600"
+     data-scale="0.02" data-floor="1">
+
+    <!-- Г-образный коридор -->
+    <polygon points="100,100 700,100 700,250 300,250 300,500 100,500"
+             data-type="corridor" data-id="C1"
+             data-capacity="20" data-width="1.6"
+             fill="#fdfde0" stroke="#555" stroke-width="2"/>
+
+    <!-- Комната-трапеция -->
+    <polygon points="300,300 700,300 700,500 300,500"
+             data-type="room" data-id="R1"
+             data-capacity="10" data-name="Трапеция"
+             fill="#e6e6fa" stroke="#555" stroke-width="2"/>
+
+    <!-- Дверь -->
+    <line x1="400" y1="250" x2="500" y2="250" data-type="door" data-id="D1"
+          data-connects="R1,C1" data-width="1.0"
+          stroke="#c00" stroke-width="6"/>
+
+    <!-- Выход -->
+    <line x1="100" y1="200" x2="100" y2="260" data-type="exit" data-id="E1"
+          data-connects="C1,OUTSIDE" data-throughput="2.0" data-width="1.2"
+          stroke="#2a2" stroke-width="8"/>
+</svg>
