@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Планы и сценарий</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<main>
+  <aside>
+    <section>
+      <h2>Добавить этаж</h2>
+      <label>Название<input id="name" placeholder="Первый этаж"></label>
+      <label>Номер этажа (чем меньше, тем ниже)<input id="level" type="number" value="1"></label>
+      <label>План в формате SVG<input id="file" type="file" accept=".svg,image/svg+xml"></label>
+      <button id="add" class="primary">Добавить этаж</button>
+    </section>
+    <section>
+      <h2>Расставить на плане</h2>
+      <div class="tabs">
+        <button data-tool="stair">Лестница</button>
+        <button data-tool="exit">Выход</button>
+        <button data-tool="fire">Очаг пожара</button>
+        <button data-tool="spawn">Точка людей</button>
+        <button data-tool="del">Удалить отметку</button>
+      </div>
+      <label id="wrapW">Ширина проёма, м
+        <input id="width" type="number" min="0.6" step="0.1" value="1.0">
+      </label>
+      <p class="muted">Кликните по плану, чтобы поставить отметку текущим инструментом. Клик по уже стоящей лестнице или выходу переставит её ширину на значение выше. Лестница физически ведёт на этаж ниже и выходит там в тех же координатах — на самом нижнем этаже ставьте выходы. Стены на плане (тёмные линии) люди в симуляции обойти не смогут, поэтому проёмы должны быть видимым разрывом в стене.</p>
+    </section>
+    <section>
+      <h2>Параметры симуляции</h2>
+      <label>Количество людей<input type="number" min="1" data-p="people"></label>
+      <label>Скорость ходьбы, м/с<input type="number" min="0.1" step="0.1" data-p="speed"></label>
+      <label>Время спуска по одному пролёту лестницы, с<input type="number" min="1" step="1" data-p="stairTime"></label>
+      <label>Пропускная способность выхода, чел/(м·с)<input type="number" min="0.1" step="0.1" data-p="exitFlow"></label>
+      <label>Пропускная способность лестницы, чел/(м·с)<input type="number" min="0.1" step="0.1" data-p="stairFlow"></label>
+      <label>Скорость распространения огня, м/с<input type="number" min="0.05" step="0.05" data-p="fireRate"></label>
+      <label>Масштаб: единиц SVG в 1 метре<input type="number" min="0.1" step="0.5" data-p="scale"></label>
+      <p class="muted">Пропускная способность — сколько человек в секунду проходит через 1 метр ширины проёма или лестницы (типичные ориентиры: выход ≈ 1.3, лестница вниз ≈ 1.0). Итоговая скорость прохода = ширина × это число; при перегрузке перед проёмом образуется затор.</p>
+    </section>
+    <button id="save" class="primary">Сохранить сценарий</button>
+    <a href="viewer.html" style="margin-left:8px">Открыть симуляцию</a>
+    <p id="msg" role="status"></p>
+  </aside>
+  <div>
+    <div class="tabs" id="tabs"></div>
+    <div class="plan" id="plan"></div>
+    <p><button id="del">Удалить этот этаж</button></p>
+  </div>
+</main>
+<script src="shared.js"></script>
+<script>
+Auth.guard();
+Auth.header('Планы и сценарий');
+
+let b = Store.load(), cur = null, tool = 'stair', plan = null, rad = 1;
+const curFloor = () => b.floors.find(f => f.id === cur) || sorted(b)[0];
+const say = (t, bad) => { const m = $('#msg'); m.textContent = t; m.style.color = bad ? 'var(--fire)' : 'inherit'; };
+
+function render() {
+  const fl = curFloor(), tabsEl = $('#tabs'), box = $('#plan');
+  tabsEl.innerHTML = '';
+  sorted(b).forEach(f => {
+    const t = document.createElement('button');
+    t.textContent = `${f.name} (${f.level})`;
+    t.className = f === fl ? 'on' : '';
+    t.onclick = () => { cur = f.id; render(); };
+    tabsEl.append(t);
+  });
+  document.querySelectorAll('[data-tool]').forEach(x => x.classList.toggle('on', x.dataset.tool === tool));
+  $('#wrapW').style.display = (tool === 'stair' || tool === 'exit') ? '' : 'none';
+  if (!fl) { box.innerHTML = '<p class="muted" style="padding:24px">Добавьте первый этаж: выберите SVG-план слева.</p>'; return; }
+  cur = fl.id;
+  plan = drawPlan(box, fl);
+  rad = drawMarks(plan.g, b, fl);
+  plan.svg.style.cursor = 'crosshair';
+  plan.svg.onclick = place;
+}
+
+function place(e) {
+  const fl = curFloor(), s = plan.svg, pt = s.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(s.getScreenCTM().inverse());
+  const w = Math.max(0.3, parseFloat($('#width').value) || 1);
+  const near = (o) => o.floor === fl.id && Math.hypot(o.x - p.x, o.y - p.y) < rad * 2.5;
+
+  if (tool === 'stair' || tool === 'exit') {
+    const list = tool === 'stair' ? b.stairs : b.exits;
+    const hit = list.find(near);
+    if (hit) { hit.w = w; say(`Ширина обновлена: ${w} м.`); render(); return; }
+    if (tool === 'stair' && sorted(b)[0] === fl) return say('Лестница ведёт на этаж ниже. На самом нижнем этаже поставьте выход.', 1);
+    list.push({ floor: fl.id, x: Math.round(p.x), y: Math.round(p.y), w });
+  } else if (tool === 'spawn') {
+    b.spawns.push({ floor: fl.id, x: Math.round(p.x), y: Math.round(p.y) });
+  } else if (tool === 'fire') {
+    b.fire = { floor: fl.id, x: Math.round(p.x), y: Math.round(p.y) };
+  } else {
+    ['stairs', 'exits', 'spawns'].forEach(k => b[k] = b[k].filter(o => !near(o)));
+    if (b.fire && near(b.fire)) b.fire = null;
+  }
+  say('');
+  render();
+}
+
+document.querySelectorAll('[data-tool]').forEach(x => x.onclick = () => { tool = x.dataset.tool; render(); });
+
+$('#add').onclick = async () => {
+  const f = $('#file').files[0], name = $('#name').value.trim(), level = parseInt($('#level').value, 10);
+  if (!f || !name || isNaN(level)) return say('Укажите название, номер этажа и выберите SVG-файл.', 1);
+  if (b.floors.some(x => x.level === level)) return say('Этаж с таким номером уже есть.', 1);
+  try {
+    const c = cleanSvg(await f.text());
+    const fl = { id: 'f' + Date.now(), name, level, svg: c.svg, vb: c.vb };
+    b.floors.push(fl);
+    cur = fl.id;
+    $('#file').value = ''; $('#name').value = '';
+    $('#level').value = level + 1;
+    say('Этаж добавлен. Не забудьте сохранить сценарий.');
+    render();
+  } catch (err) { say(err.message, 1); }
+};
+
+$('#del').onclick = () => {
+  const fl = curFloor();
+  if (!fl || !confirm(`Удалить этаж «${fl.name}» вместе с отметками?`)) return;
+  b.floors = b.floors.filter(x => x !== fl);
+  ['stairs', 'exits', 'spawns'].forEach(k => b[k] = b[k].filter(o => o.floor !== fl.id));
+  if (b.fire && b.fire.floor === fl.id) b.fire = null;
+  cur = null;
+  render();
+};
+
+document.querySelectorAll('[data-p]').forEach(i => {
+  i.value = b.params[i.dataset.p];
+  i.oninput = () => { const v = parseFloat(i.value); if (v > 0) b.params[i.dataset.p] = v; };
+});
+
+$('#save').onclick = () => {
+  const w = [];
+  if (!b.exits.length) w.push('нет ни одного выхода');
+  sorted(b).slice(1).forEach(f => { if (!b.stairs.some(s => s.floor === f.id)) w.push(`на этаже «${f.name}» нет лестницы`); });
+  if (!Store.save(b)) return say('Не удалось сохранить: SVG слишком тяжёлые для localStorage (лимит около 5 МБ).', 1);
+  say('Сохранено.' + (w.length ? ' Проверьте: ' + w.join('; ') + '.' : ''), w.length > 0);
+};
+
+render();
+</script>
+</body>
+</html>

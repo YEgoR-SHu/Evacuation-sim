@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Вход — моделирование эвакуации</title>
+<link rel="stylesheet" href="shared.css">
+<style>.login{max-width:420px;margin:12vh auto;padding:0 16px}</style>
+</head>
+<body>
+<div class="login">
+  <h1>Моделирование эвакуации</h1>
+  <p class="muted">Вход только для администратора: загрузка планов этажей, расстановка лестниц и выходов, очаг пожара и параметры симуляции.</p>
+  <section class="card">
+    <label>Пароль<input id="pass" type="password" autocomplete="current-password"></label>
+    <button id="in" class="primary">Войти</button>
+    <p id="err" role="alert" style="color:var(--fire);margin:8px 0 0"></p>
+  </section>
+</div>
+<script src="shared.js"></script>
+<script>
+  // Демо-пароль. В боевой версии проверяйте вход на сервере.
+  const PASS = 'admin';
+  const tryIn = () => {
+    if ($('#pass').value !== PASS) return $('#err').textContent = 'Неверный пароль.';
+    Auth.login();
+    location.href = 'admin.html';
+  };
+  $('#in').onclick = tryIn;
+  $('#pass').onkeydown = e => { if (e.key === 'Enter') tryIn(); };
+</script>
+</body>
+</html>

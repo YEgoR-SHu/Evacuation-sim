@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Симуляция эвакуации</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<main>
+  <aside>
+    <section>
+      <h2>Управление</h2>
+      <div class="tabs">
+        <button id="go" class="primary">Запустить</button>
+        <button id="reset">Сбросить</button>
+      </div>
+      <label>Скорость времени
+        <select id="speed"><option value="1">×1</option><option value="5" selected>×5</option><option value="20">×20</option></select>
+      </label>
+    </section>
+    <section>
+      <h2>Ход эвакуации</h2>
+      <dl class="stats" id="stats"></dl>
+    </section>
+    <p id="msg" role="status" class="muted"></p>
+  </aside>
+  <div>
+    <div class="tabs" id="tabs"></div>
+    <div class="plan" id="plan"></div>
+    <p class="muted">Тёмные точки — идут; жёлтые — стоят в заторе или в очереди на проходе; оранжевые — без пути; чёрные — застигнуты огнём.</p>
+  </div>
+</main>
+<script src="shared.js"></script>
+<script>
+Auth.guard();
+Auth.header('Симуляция эвакуации');
+
+let b = null, ENGINE = null, occ = {}, people = [], cur = null, plan = null;
+let t = 0, run = false, last = 0, busy = false;
+const say = (s, bad) => { const m = $('#msg'); m.textContent = s; m.style.color = bad ? 'var(--fire)' : 'inherit'; };
+
+function tabs() {
+  const el = $('#tabs');
+  el.innerHTML = '';
+  sorted(b).forEach(f => {
+    const x = document.createElement('button');
+    x.textContent = `${f.name} (${f.level})`;
+    x.className = f.id === cur ? 'on' : '';
+    x.onclick = () => { cur = f.id; plan = null; };
+    el.append(x);
+  });
+}
+
+/* Пересобирает сетки стен и поля эвакуации, расставляет людей по точкам появления. */
+async function init() {
+  b = Store.load();
+  const fs = sorted(b);
+  if (!fs.length) return false;
+  $('#go').disabled = true;
+  say('Считаю проходимость планов и маршруты…');
+  try { ENGINE = await buildEngine(b); }
+  catch (err) { say(err.message, 1); $('#go').disabled = false; return false; }
+
+  occ = {};
+  fs.forEach(f => occ[f.id] = new Array(ENGINE.grids[f.id].gw * ENGINE.grids[f.id].gh).fill(0));
+
+  people = [];
+  const P = b.params;
+  for (let k = 0; k < P.people; k++) {
+    const sp = b.spawns.length ? b.spawns[k % b.spawns.length] : null;
+    const fl = sp ? fs.find(f => f.id === sp.floor) : fs[Math.floor(Math.random() * fs.length)];
+    const g = ENGINE.grids[fl.id];
+    const px = sp ? sp.x + (Math.random() - .5) * g.cu * 3 : g.vx + Math.random() * g.gw * g.cu;
+    const py = sp ? sp.y + (Math.random() - .5) * g.cu * 3 : g.vy + Math.random() * g.gh * g.cu;
+    const idx = snapFree(g, occ[fl.id], px, py);
+    if (idx < 0) continue; // некуда поставить — здание переполнено в этой точке
+    occ[fl.id][idx] = 1;
+    const field = ENGINE.fields[fl.id][idx];
+    people.push({ floor: fl.id, idx, state: isFinite(field) ? 'go' : 'stuck', freeAt: 0, speed: P.speed * (.85 + Math.random() * .3) });
+  }
+  t = 0;
+  const stuck = people.filter(p => p.state === 'stuck').length;
+  say(stuck ? `У ${stuck} чел. нет пути к выходу: проверьте, что на каждом этаже есть лестница вниз или выход, и что они не отрезаны стенами.` : '');
+  $('#go').disabled = false;
+  return true;
+}
+
+/* Один шаг человека по полю расстояний с учётом занятых клеток (исключение = затор) и без срезания углов стен. */
+function moveOneStep(p) {
+  const g = ENGINE.grids[p.floor], field = ENGINE.fields[p.floor], occF = occ[p.floor];
+  const cur0 = field[p.idx];
+  if (!isFinite(cur0)) { occF[p.idx] = 0; p.state = 'stuck'; return; }
+  const x = p.idx % g.gw, y = (p.idx / g.gw) | 0;
+  let best = -1, bestVal = cur0 - 1e-6;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    if (!dx && !dy) continue;
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= g.gw || ny >= g.gh) continue;
+    const nidx = ny * g.gw + nx;
+    if (g.wall[nidx] || occF[nidx]) continue;
+    if (dx && dy && (g.wall[y * g.gw + nx] || g.wall[ny * g.gw + x])) continue;
+    const v = field[nidx];
+    if (v < bestVal) { bestVal = v; best = nidx; }
+  }
+  if (best < 0) return; // все клетки в сторону выхода заняты — стоим в заторе, попробуем в следующий тик
+  const dx = (best % g.gw) - x, dy = ((best / g.gw) | 0) - y;
+  const travel = ((dx && dy) ? g.cu * Math.SQRT2 : g.cu) / p.speed;
+  occF[p.idx] = 0; occF[best] = 1; p.idx = best;
+  p.freeAt = t + travel;
+}
+
+function step(dt) {
+  t += dt;
+  const P = b.params, R = b.fire ? P.fireRate * P.scale * t : 0;
+  for (const p of people) {
+    if (p.state === 'out' || p.state === 'dead' || p.state === 'stuck') continue;
+
+    if (p.state === 'stairs') {
+      if (t < p.freeAt) continue;
+      if (occ[p.toFloor][p.toIdx]) continue; // клетка прибытия ещё занята — подождать
+      occ[p.toFloor][p.toIdx] = 1;
+      p.floor = p.toFloor; p.idx = p.toIdx; p.state = 'go'; p.freeAt = t;
+      continue;
+    }
+
+    if (t < p.freeAt) continue; // идёт к следующей клетке или стоит в очереди на двери
+
+    if (b.fire && p.floor === b.fire.floor) {
+      const g = ENGINE.grids[p.floor], x = g.vx + (p.idx % g.gw + .5) * g.cu, y = g.vy + ((p.idx / g.gw | 0) + .5) * g.cu;
+      if (Math.hypot(x - b.fire.x, y - b.fire.y) < R) { occ[p.floor][p.idx] = 0; p.state = 'dead'; continue; }
+    }
+
+    const portal = ENGINE.portals[p.floor].get(p.idx);
+    if (portal) {
+      if (t < (portal.busyUntil || 0)) continue; // проём/лестница заняты предыдущим человеком — очередь
+      portal.busyUntil = t + portal.gap;
+      occ[p.floor][p.idx] = 0;
+      if (portal.kind === 'exit') { p.state = 'out'; p.tOut = t; }
+      else { p.state = 'stairs'; p.toFloor = portal.toFloor; p.toIdx = portal.toIdx; p.freeAt = t + portal.stairTime; }
+      continue;
+    }
+
+    moveOneStep(p);
+  }
+}
+
+function draw() {
+  const fl = b.floors.find(f => f.id === cur);
+  if (!fl) return;
+  if (!plan) plan = drawPlan($('#plan'), fl);
+  const g0 = plan.g;
+  g0.innerHTML = '';
+  const R = b.fire ? b.params.fireRate * b.params.scale * t : 0;
+  if (b.fire && b.fire.floor === fl.id && R > 0)
+    g0.insertAdjacentHTML('beforeend', `<circle cx="${b.fire.x}" cy="${b.fire.y}" r="${R}" fill="#d6361f" fill-opacity=".22" stroke="#d6361f"/>`);
+  const r = drawMarks(g0, b, fl);
+  const g = ENGINE.grids[fl.id];
+  const dot = { dead: '#000', stuck: '#b5730b', go: '#1c2a33' };
+  people.forEach(p => {
+    if (p.floor !== fl.id || p.state === 'out') return;
+    const x = g.vx + (p.idx % g.gw + .5) * g.cu, y = g.vy + ((p.idx / g.gw | 0) + .5) * g.cu;
+    const waiting = p.state === 'go' && t < p.freeAt;
+    g0.insertAdjacentHTML('beforeend', `<circle cx="${x}" cy="${y}" r="${r * .55}" fill="${waiting ? '#d0a300' : dot[p.state]}"/>`);
+  });
+  const c = s => people.filter(p => p.state === s).length, out = people.filter(p => p.state === 'out');
+  $('#stats').innerHTML = people.length
+    ? `<dt>Прошло, с</dt><dd>${t.toFixed(0)}</dd><dt>Вышли</dt><dd>${out.length} из ${people.length}</dd>` +
+      `<dt>Ещё в здании</dt><dd>${c('go') + c('stairs')}</dd><dt>Не спаслись</dt><dd>${c('dead')}</dd><dt>Нет пути</dt><dd>${c('stuck')}</dd>` +
+      (!c('go') && !c('stairs') && out.length ? `<dt>Здание освобождено за, с</dt><dd>${Math.max(...out.map(p => p.tOut)).toFixed(0)}</dd>` : '')
+    : '<dt>Нажмите «Запустить»</dt><dd></dd>';
+}
+
+function frame(ts) {
+  if (run && !busy) {
+    step(Math.min((ts - last) / 1000, .1) * +$('#speed').value);
+    last = ts;
+    if (!people.some(p => p.state === 'go' || p.state === 'stairs')) { run = false; $('#go').textContent = 'Запустить'; }
+  }
+  if (b && cur) draw();
+  requestAnimationFrame(frame);
+}
+
+$('#go').onclick = async () => {
+  if (busy) return;
+  if (!run && !people.some(p => p.state === 'go' || p.state === 'stairs')) {
+    busy = true;
+    const ok = await init();
+    busy = false;
+    if (!ok) return;
+  }
+  run = !run;
+  last = performance.now();
+  $('#go').textContent = run ? 'Пауза' : 'Запустить';
+};
+$('#reset').onclick = () => { run = false; people = []; t = 0; say(''); $('#go').textContent = 'Запустить'; };
+
+(async function start() {
+  b = Store.load();
+  if (!b.floors.length) {
+    $('#plan').innerHTML = '<p class="muted" style="padding:24px">Планы ещё не загружены. Добавьте этажи в разделе «Планы и сценарий».</p>';
+    $('#go').disabled = true;
+    return;
+  }
+  cur = (b.fire ? b.fire.floor : sorted(b).at(-1).id);
+  tabs();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
