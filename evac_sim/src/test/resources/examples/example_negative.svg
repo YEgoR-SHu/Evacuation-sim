@@ -3,9 +3,9 @@
      width="400" height="300" viewBox="0 0 400 300"
      data-scale="0.02" data-floor="1">
 
-    <!-- Комната без data-capacity (парсер даст 0) -->
+    <!-- Валидная пустая комната; ошибка ниже только в data-connects двери -->
     <rect x="50" y="50" width="150" height="100"
-          data-type="room" data-id="R_no_capacity"
+          data-type="room" data-id="R_no_capacity" data-capacity="0"
           fill="#e6e6fa" stroke="#555"/>
 
     <!-- Дверь с одним id вместо двух — Connector бросит IllegalArgumentException -->

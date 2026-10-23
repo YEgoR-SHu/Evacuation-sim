@@ -1,0 +1,28 @@
+Third-party components included in Evacuation-sim 0.2.0
+
+JGraphT 1.5.3
+Copyright 2003-2026, by Barak Naveh and Contributors.
+Distributed under the Eclipse Public License 2.0 option of its dual license.
+License: licenses/jgrapht-EPL-2.0.txt
+Unmodified source: https://github.com/jgrapht/jgrapht/tree/jgrapht-1.5.3
+
+JHeaps 0.14
+Copyright (C) 2014-2020 Dimitrios Michail
+Apache License 2.0: licenses/jheaps-Apache-2.0.txt
+Unmodified source: https://github.com/d-michail/jheaps/tree/jheaps-0.14
+
+Apfloat 1.14.0
+Copyright (c) 2024 Mikko Tommila
+MIT License: licenses/apfloat-MIT.txt
+Unmodified source: https://github.com/mtommila/apfloat/tree/1.14.0
+
+Apache Batik 1.20, XML Graphics Commons 2.12, Commons Logging 1.3.0,
+Jackson Databind/Core 2.22.4 and Jackson Annotations 2.22:
+Their original LICENSE and NOTICE texts are retained in META-INF/LICENSE,
+META-INF/NOTICE, META-INF/LICENSE.txt and META-INF/NOTICE.txt.
+Jackson Core's additional original algorithm notices are retained in
+META-INF/FastDoubleParser-LICENSE, META-INF/FastDoubleParser-ThirdParty-LICENSE
+and META-INF/Schubfach-LICENSE.
+
+XML APIs Extensions 1.3.04:
+Original terms and notices are retained in license/ from its distribution.

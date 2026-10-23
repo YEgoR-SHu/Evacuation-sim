@@ -4,6 +4,7 @@ import com.artemyasnik.graph.EvacGraph;
 import com.artemyasnik.graph.EvacGraphBuilder;
 import com.artemyasnik.model.*;
 import com.artemyasnik.parser.SvgFloorPlanParser;
+import com.artemyasnik.web.EvacuationServer;
 
 import java.io.File;
 import java.io.InputStream;
@@ -15,6 +16,14 @@ public class Main {
     private static final String DEFAULT_RESOURCE = "/examples/example.svg";
 
     public static void main(String[] args) throws Exception {
+        if (args.length > 0 && args[0].equals("--serve")) {
+            if (args.length > 2) throw new IllegalArgumentException("Использование: --serve [порт]");
+            int port = args.length == 2 ? Integer.parseInt(args[1]) : 8080;
+            EvacuationServer server = EvacuationServer.start(port);
+            Runtime.getRuntime().addShutdownHook(new Thread(server::close));
+            System.out.println("Расчёт эвакуации: http://127.0.0.1:" + server.port() + "/");
+            return;
+        }
         FloorPlan plan = loadPlan(args);
 
         System.out.println("Этаж " + plan.getFloorNumber() + ", масштаб "

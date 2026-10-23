@@ -1,0 +1,9 @@
+**/target/
+.idea/
+**/.idea/
+.DS_Store
+**/.DS_Store
+*.log
+playwright-report/
+test-results/
+node_modules/

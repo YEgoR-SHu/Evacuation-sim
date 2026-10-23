@@ -1,0 +1,28 @@
+name: Build and verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: evac_sim/pom.xml
+      - name: Build and test
+        run: mvn -B -f evac_sim/pom.xml clean verify
+      - name: Check packaged command line
+        run: java -Djava.awt.headless=true -jar evac_sim/target/evac-sim-0.2.0.jar examples/example.svg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evacuation-sim-0.2.0
+          path: evac_sim/target/evac-sim-0.2.0.jar

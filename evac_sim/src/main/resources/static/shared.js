@@ -24,7 +24,7 @@ const Auth = {
   guard() { if (!Auth.isIn()) location.replace('login.html'); },
   header(title) {
     const h = document.createElement('header');
-    h.innerHTML = `<b>${title}</b><a href="admin.html">Планы и сценарий</a><a href="viewer.html">Симуляция</a><a href="#" id="out">Выйти</a>`;
+    h.innerHTML = `<b>${title}</b><a href="index.html">Расчёт по SVG</a><a href="admin.html">Планы и сценарий</a><a href="viewer.html">Симуляция</a><a href="#" id="out">Выйти</a>`;
     document.body.prepend(h);
     $('#out').onclick = e => { e.preventDefault(); Auth.logout(); location.href = 'login.html'; };
   }
