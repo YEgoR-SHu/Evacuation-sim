@@ -2,7 +2,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.artemyasnik</groupId>
     <artifactId>evac-sim</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <name>Evacuation-sim</name>
     <description>SVG floor plans, capacity-aware evacuation routing and queue simulation.</description>
     <properties>
@@ -102,6 +102,8 @@
                         <goals><goal>shade</goal></goals>
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>standalone</shadedClassifierName>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>

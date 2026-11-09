@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Редактор здания</title>
+    <link rel="stylesheet" href="/src/styles/shared.css">
+</head>
+<body>
+<main>
+    <aside>
+        <section>
+            <h2>Здание: <span id="b-title">...</span></h2>
+            <p class="muted" id="b-desc"></p>
+        </section>
+
+        <!-- Форма добавления этажа -->
+        <section id="form-floor" style="display:none;">
+            <h2>Добавить этаж</h2>
+            <label>Название <input id="f-name" type="text" placeholder="Первый этаж"></label>
+            <label>Номер этажа <input id="f-level" type="number" value="1"></label>
+            <label>SVG-файл <input id="f-file" type="file" accept=".svg,image/svg+xml"></label>
+            <button id="f-create" class="primary" style="width:100%">Добавить</button>
+            <p id="f-msg" class="muted"></p>
+        </section>
+
+        <!-- Форма создания сценария -->
+        <section id="form-scen" style="display:none;">
+            <h2>Создать сценарий</h2>
+            <label>Название <input id="s-name" type="text" placeholder="Основная эвакуация"></label>
+            <button id="s-create" class="primary" style="width:100%">Создать</button>
+            <p id="s-msg" class="muted"></p>
+        </section>
+    </aside>
+
+    <div>
+        <div class="tabs" style="margin-bottom:16px;">
+            <button id="tab-floors" class="on">Этажи</button>
+            <button id="tab-scens">Сценарии</button>
+        </div>
+
+        <div id="view-floors">
+            <div id="floors-list"></div>
+        </div>
+
+        <div id="view-scens" style="display:none;">
+            <div id="scens-list"></div>
+        </div>
+    </div>
+</main>
+<script type="module" src="/src/ui/building.ts"></script>
+</body>
+</html>

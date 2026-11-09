@@ -1,0 +1,10 @@
+services:
+  evacuation:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - evacuation-data:/app/data
+    restart: unless-stopped
+volumes:
+  evacuation-data:

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Настройка сценария</title>
+    <link rel="stylesheet" href="/src/styles/shared.css">
+    <style>
+        /* Стили для кликабельного SVG */
+        .plan-svg { cursor: crosshair; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+        .plan-svg:active { cursor: grabbing; }
+        .tool-btn.on { outline: 2px solid var(--stair); background: #e0e7ff; }
+        .marker { pointer-events: none; } /* Чтобы клики проходили сквозь маркеры */
+        .marker text { user-select: none; font-weight: 700; }
+        .tool-group { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+<main>
+    <aside>
+        <section>
+            <h2>Сценарий: <span id="s-title">...</span></h2>
+            <p class="muted" id="s-building"></p>
+            <a href="#" id="back-link" class="muted">← Вернуться к зданию</a>
+            <p><a href="#" id="viewer-link" class="btn">Перейти к расчёту</a></p>
+        </section>
+
+        <!-- Выбор этажа -->
+        <section>
+            <h2>Этаж</h2>
+            <select id="floor-select" style="width:100%; margin-bottom:8px;"></select>
+            <p class="muted" style="font-size:12px">Выберите этаж, чтобы ставить на нём метки.</p>
+        </section>
+
+        <!-- Инструменты -->
+        <section>
+            <h2>Инструменты</h2>
+            <div class="tool-group">
+                <button class="tool-btn on" data-tool="stair">Лестница</button>
+                <button class="tool-btn" data-tool="exit">Выход</button>
+                <button class="tool-btn" data-tool="spawn">Люди</button>
+                <button class="tool-btn" data-tool="del">Удалить</button>
+            </div>
+            <label id="wrap-w">Ширина проёма (м) <input id="tool-width" type="number" min="0.1" step="0.1" value="1.0"></label>
+            <p class="muted" style="font-size:12px">Кликните по плану, чтобы поставить метку. Для лестницы/выхода ширина обязательна. Сначала сохраните метки, затем свяжите лестницы на экране расчёта.</p>
+        </section>
+
+        <section id="stored-fire" hidden>
+            <h2>Сохранённый очаг</h2>
+            <p id="fire-status" class="muted"></p>
+            <button id="clear-fire-btn">Убрать очаг</button>
+        </section>
+
+        <!-- Параметры симуляции -->
+        <section>
+            <h2>Параметры</h2>
+            <p class="muted">Для размеченных помещений численность задаётся отдельно на экране расчёта.</p>
+            <label>Людей на метках размещения <input type="number" id="p-people" min="0" max="10000" step="1"></label>
+            <label>Скорость (м/с) <input type="number" id="p-speed" min="0.1" step="0.1"></label>
+            <label>Масштаб (SVG ед. в 1 м) <input type="number" id="p-scale" min="0.1" step="0.5"></label>
+            <label>Спуск по лестнице (с) <input type="number" id="p-stairTime" min="1" step="1"></label>
+            <label>Пропускная выхода (чел/м·с) <input type="number" id="p-exitFlow" min="0.1" step="0.1"></label>
+            <label>Пропускная лестницы (чел/м·с) <input type="number" id="p-stairFlow" min="0.1" step="0.1"></label>
+            <button id="save-btn" class="primary" style="width:100%; margin-top:12px;">Сохранить</button>
+            <p id="msg" class="muted"></p>
+        </section>
+    </aside>
+
+    <div>
+        <div class="plan" id="plan-container">
+            <!-- Сюда вставится SVG -->
+            <p class="muted" style="padding:24px">Загрузка плана...</p>
+        </div>
+        <p id="plan-mode" class="muted"></p>
+        <section><h2>Метки этажа</h2><div id="mark-list"></div></section>
+        <p class="muted">Сценарии пожара и других опасностей будут добавлены после проверки базовой эвакуации.</p>
+    </div>
+</main>
+<script type="module" src="/src/ui/scenario.ts"></script>
+</body>
+</html>

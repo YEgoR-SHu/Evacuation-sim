@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Вход</title>
+    <link rel="stylesheet" href="/src/styles/shared.css">
+    <style>
+        .login-box { max-width: 380px; margin: 10vh auto; padding: 24px; }
+        .error { color: var(--fire); font-size: 14px; margin-top: 8px; }
+    </style>
+</head>
+<body>
+<main class="login-main">
+    <div class="login-box card">
+        <h1>Вход</h1>
+        <label>Логин <input id="username" type="text" autocomplete="username"></label><br>
+        <label>Пароль <input id="password" type="password" autocomplete="current-password"></label>
+        <button id="login-btn" class="primary" style="width:100%; margin-top:16px;">Войти</button>
+        <p id="error" class="error"></p>
+        <p class="muted" style="margin-top:16px;">
+            Нет аккаунта? <a href="#" id="to-register">Зарегистрироваться</a>
+        </p>
+    </div>
+</main>
+<script type="module" src="/src/ui/login.ts"></script>
+</body>
+</html>

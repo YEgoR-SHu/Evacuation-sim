@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Мои здания</title>
+    <link rel="stylesheet" href="/src/styles/shared.css">
+</head>
+<body>
+<main>
+    <aside>
+        <section>
+            <h2>Добавить здание</h2>
+            <label>Название <input id="b-name" type="text" placeholder="Офис на Ленина"></label>
+            <label>Описание <input id="b-desc" type="text" placeholder="Тестовое здание"></label>
+            <button id="create-btn" class="primary" style="width:100%">Создать</button>
+            <p id="msg" class="muted"></p>
+        </section>
+    </aside>
+    <div>
+        <h1>Мои здания</h1>
+        <div id="list" class="card-list"></div>
+    </div>
+</main>
+<script type="module" src="/src/ui/buildings.ts"></script>
+</body>
+</html>

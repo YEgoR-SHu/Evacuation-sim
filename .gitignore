@@ -7,3 +7,6 @@
 playwright-report/
 test-results/
 node_modules/
+web/dist/
+data/
+.env

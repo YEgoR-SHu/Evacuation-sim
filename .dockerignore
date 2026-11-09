@@ -1,0 +1,12 @@
+.git
+**/target
+**/node_modules
+web/dist
+data
+.env
+test-results
+*.log
+
+!server/target/
+server/target/*
+!server/target/evacuation-sim-0.3.0.jar
