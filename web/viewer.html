@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Расчёт эвакуации</title>
+    <link rel="stylesheet" href="/src/styles/shared.css">
+</head>
+<body>
+<main class="viewer-main">
+    <aside>
+        <section>
+            <h2>Сценарий</h2>
+            <label>Здание <select id="building-select"></select></label>
+            <label>Сценарий <select id="scenario-select"></select></label>
+            <div class="actions"><button id="load-btn">Загрузить</button><a id="edit-link" class="btn" href="/buildings.html">Настроить план</a></div>
+            <p id="mode-note" class="muted"></p>
+        </section>
+        <section id="occupancy-section" hidden>
+            <h2>Люди по помещениям</h2>
+            <div class="actions"><button id="fill-capacity">По вместимости</button><button id="clear-occupancy">Очистить</button></div>
+            <div id="occupancy-list" class="field-list"></div>
+        </section>
+        <section>
+            <h2>Недоступные проходы</h2>
+            <div id="blocked-list" class="field-list"><p class="muted">Загрузите сценарий.</p></div>
+        </section>
+        <section id="stairs-section" hidden>
+            <h2>Связи лестниц</h2>
+            <p class="muted">Выберите метки верхнего и нижнего этажей, чтобы связать лестницу явно.</p>
+            <label>Откуда <select id="stair-from"></select></label>
+            <label>Куда <select id="stair-to"></select></label>
+            <button id="add-stair-link">Связать</button>
+            <ul id="stair-links"></ul>
+        </section>
+        <section>
+            <button id="calculate-btn" class="primary full" disabled>Рассчитать эвакуацию</button>
+            <button id="reset-settings-btn" class="full" style="margin-top:8px">Сбросить настройки расчёта</button>
+            <p id="msg" role="status" class="muted"></p>
+        </section>
+        <section>
+            <h2>Сохранённые расчёты</h2>
+            <label>Результат <select id="run-select"><option value="">Выберите расчёт</option></select></label>
+            <button id="open-run-btn" disabled>Открыть</button>
+        </section>
+    </aside>
+    <div class="viewer-content">
+        <section>
+            <div class="floor-tabs" id="floor-tabs" aria-label="Этажи"></div>
+            <div class="plan-box" id="plan-container"><p class="muted">Загрузите сценарий для расчёта.</p></div>
+            <div class="playback-controls">
+                <button id="go-btn" disabled>Воспроизвести</button><button id="reset-btn" disabled>В начало</button>
+                <label>Скорость <select id="speed-select"><option value="1">×1</option><option value="5" selected>×5</option><option value="20">×20</option></select></label>
+                <output id="clock">0,0 с</output>
+            </div>
+            <label class="timeline-label">Момент времени <input id="timeline" type="range" min="0" max="0" step="any" value="0" disabled></label>
+            <p class="legend">● Движение &nbsp; <span class="waiting-dot">● Ожидание</span> &nbsp; <span class="unreachable-dot">● Нет пути</span></p>
+        </section>
+        <section id="result-section" hidden>
+            <h2>Результат</h2>
+            <div id="summary" class="summary-grid"></div>
+            <p id="result-status"></p><p id="run-info" class="muted"></p>
+            <h3>Сейчас на временной шкале</h3><p id="playback-stats"></p>
+            <h3>Сравнение маршрутизации</h3><div id="comparisons" class="table-wrap"></div>
+            <h3>Использованные маршруты</h3><div id="routes" class="table-wrap"></div>
+            <h3>Нагрузка на проходы</h3><div id="bottlenecks" class="table-wrap"></div>
+        </section>
+        <section id="warnings-section" hidden><h2>Условия расчёта</h2><ul id="warnings"></ul></section>
+    </div>
+</main>
+<script type="module" src="/src/ui/viewer.ts"></script>
+</body>
+</html>

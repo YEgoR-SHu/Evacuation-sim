@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  java:
+  unified:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,12 +17,37 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-          cache-dependency-path: evac_sim/pom.xml
-      - name: Build and test
-        run: mvn -B -f evac_sim/pom.xml clean verify
-      - name: Check packaged command line
-        run: java -Djava.awt.headless=true -jar evac_sim/target/evac-sim-0.2.0.jar examples/example.svg
+          cache-dependency-path: '**/pom.xml'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build and test all modules and packaged frontend
+        run: mvn -B clean verify
+      - name: Check playback
+        run: npm --prefix web test
+      - name: Install browser
+        run: npm --prefix web exec -- playwright install --with-deps chromium
+      - name: Check packaged CLI
+        run: java -Djava.awt.headless=true -jar evac_sim/target/evac-sim-0.3.0-standalone.jar examples/example.svg
+      - name: Check packaged platform in browser
+        env:
+          DB_PATH: /tmp/evac-ci.db
+          PORT: '8080'
+        run: |
+          java -Djava.awt.headless=true -jar server/target/evacuation-sim-0.3.0.jar > /tmp/evac-server.log 2>&1 &
+          EVAC_PID=$!
+          trap 'kill "$EVAC_PID"' EXIT
+          node scripts/browser-smoke.cjs
       - uses: actions/upload-artifact@v4
         with:
-          name: evacuation-sim-0.2.0
-          path: evac_sim/target/evac-sim-0.2.0.jar
+          name: evacuation-sim-0.3.0
+          path: |
+            server/target/evacuation-sim-0.3.0.jar
+            evac_sim/target/evac-sim-0.3.0-standalone.jar
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: verification-evidence
+          path: test-results/

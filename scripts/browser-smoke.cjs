@@ -1,94 +1,130 @@
 const assert = require('node:assert/strict');
-const { existsSync } = require('node:fs');
-const { chromium } = require('playwright');
-
+const fs = require('node:fs');
+const path = require('node:path');
+const { chromium } = require('../web/node_modules/playwright');
 const base = process.env.EVAC_URL || 'http://127.0.0.1:8080';
-const executablePath = process.env.CHROMIUM_PATH || (existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined);
-
-async function calculate(page) {
-  await page.locator('#calculate').click();
-  await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Расчёт завершён:'));
-}
-
-async function upload(page, svg) {
-  await page.locator('#file').setInputFiles({ name: 'test.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg) });
-  await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('План загружен.'));
-}
-
-(async () => {
-  const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  const errors = [], externalRequests = [], checks = [];
-  page.on('pageerror', error => errors.push(error.message));
-  page.on('request', request => { if (request.url().startsWith('https://example.invalid/')) externalRequests.push(request.url()); });
+const evidence = path.resolve(__dirname, '../test-results');
+fs.mkdirSync(evidence, { recursive: true });
+async function main() {
+  for (let attempt = 0; ; attempt++) {
+    try { if ((await fetch(base + '/api/health')).ok) break; } catch {}
+    if (attempt >= 60) throw new Error('Packaged server did not become ready');
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--no-sandbox'] });
+  const context = await browser.newContext({ baseURL: base, viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
   try {
-    await page.goto(base);
-    await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Пример открыт:'));
-    assert.equal(await page.locator('#occupancy input').count(), 11);
-    assert.equal(await page.locator('#plan-info').textContent().then(text => text.includes('0,015 м/ед.')), true);
-    await calculate(page);
-    assert.equal(await page.locator('#total').textContent(), '66');
-    assert.equal(await page.locator('#evacuated').textContent(), '66');
-    assert.equal(await page.locator('#unreachable').textContent(), '0');
-    assert.ok(await page.locator('#plan polyline[marker-end]').count() > 0);
-    const bothExitTime = parseFloat((await page.locator('#duration').textContent()).replace(',', '.'));
-    checks.push('Встроенный SVG: 66 человек, завершённые маршруты и расчётное время.');
-
-    const left = page.locator('#connections label').filter({ hasText: 'E_left' }).locator('input');
-    const right = page.locator('#connections label').filter({ hasText: 'E_right' }).locator('input');
-    await left.check(); await right.check();
-    assert.equal(await page.locator('#total').textContent(), '—');
-    await calculate(page);
-    assert.equal(await page.locator('#evacuated').textContent(), '0');
-    assert.equal(await page.locator('#unreachable').textContent(), '66');
-    assert.equal(await page.locator('#plan polyline[marker-end]').count(), 0);
-    assert.match(await page.locator('#status').textContent(), /не имеют доступного пути/);
-    checks.push('Блокировка двух выходов: все 66 человек недостижимы, прошлые маршруты очищены.');
-
-    await left.uncheck();
-    await calculate(page);
-    assert.equal(await page.locator('#evacuated').textContent(), '66');
-    const oneExitTime = parseFloat((await page.locator('#duration').textContent()).replace(',', '.'));
-    assert.ok(oneExitTime > bothExitTime);
-    checks.push('Один выход: эвакуация завершена, время больше сценария с двумя выходами.');
-
-    const customSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 180" data-scale="0.1" data-floor="1" transform="translate(10 5)" onload="window.__unsafeSvg=true">
-      <script>window.__unsafeSvg=true</script>
-      <image href="https://example.invalid/unsafe.svg" width="10" height="10"/>
-      <rect x="0" y="0" width="80" height="80" fill="#e6e6fa" data-type="room" data-id="R" data-capacity="10"/>
-      <rect x="80" y="0" width="160" height="80" fill="#fff4d4" data-type="corridor" data-id="C" data-capacity="20"/>
-      <line x1="80" y1="30" x2="80" y2="50" data-type="door" data-id="D" data-connects="R,C" data-throughput="1"/>
-      <line x1="240" y1="30" x2="240" y2="50" data-type="exit" data-id="E" data-connects="C,OUTSIDE" data-throughput="1"/>
-    </svg>`;
-    await upload(page, customSvg);
-    assert.deepEqual(await page.locator('#occupancy input').evaluateAll(inputs => inputs.map(input => input.value)), ['0', '0']);
-    const roomInput = page.locator('#occupancy .occupancy-row').filter({ hasText: 'R ·' }).locator('input');
-    await roomInput.fill('3');
-    await calculate(page);
-    assert.equal(await page.locator('#total').textContent(), '3');
-    assert.equal(await page.locator('#evacuated').textContent(), '3');
-    assert.equal(await page.evaluate(() => window.__unsafeSvg), undefined);
-    assert.equal(await page.locator('#plan script, #plan image, #plan [onload]').count(), 0);
-    assert.equal(await page.locator('#plan > svg').getAttribute('transform'), null);
-    assert.equal(await page.locator('#plan > svg > g').first().getAttribute('transform'), 'translate(10 5)');
-    assert.match(await page.locator('#plan polyline[marker-end]').first().getAttribute('points'), /^50,45 /);
-    assert.deepEqual(externalRequests, []);
-    checks.push('Свой SVG: отдельное число людей 3/10, root transform согласован с маршрутом, опасные SVG-элементы удалены.');
-
-    await roomInput.fill('11');
-    await page.locator('#calculate').click();
-    await page.waitForFunction(() => document.querySelector('#status').classList.contains('error'));
-    assert.match(await page.locator('#status').textContent(), /целое число людей от 0 до 10/);
-    await page.locator('#clear-occupancy').click();
-    await calculate(page);
-    assert.equal(await page.locator('#total').textContent(), '0');
-    assert.equal(await page.locator('#evacuated').textContent(), '0');
-    checks.push('Проверка вместимости и расчёт пустого здания.');
-
+    const username = 'smoke_' + Date.now().toString(36);
+    await page.goto('/login.html');
+    await page.locator('#to-register').click();
+    await page.locator('#username').fill(username);
+    await page.locator('#password').fill('browser-test-password');
+    await page.locator('#login-btn').click();
+    await page.waitForURL('**/buildings.html');
+    await page.locator('#b-name').fill('Единый проект — проверка');
+    const created = page.waitForResponse(r => r.url().endsWith('/api/buildings') && r.request().method() === 'POST');
+    await page.locator('#create-btn').click();
+    const bid = (await (await created).json()).id;
+    assert.ok(bid);
+    async function api(method, url, data) {
+      const response = await context.request.fetch(url, { method, data });
+      const body = await response.text();
+      assert.ok(response.ok(), method + ' ' + url + ': ' + response.status() + ' ' + body);
+      return body ? JSON.parse(body) : null;
+    }
+    const office = fs.readFileSync(path.resolve(__dirname, '../evac_sim/src/main/resources/examples/example_office.svg'), 'utf8');
+    const floor = await api('POST', '/api/buildings/' + bid + '/floors', { name: 'Офис', level: 1, svg: office, vb: [0, 0, 1200, 800] });
+    const scenario = await api('POST', '/api/buildings/' + bid + '/scenarios', { name: 'Базовая эвакуация' });
+    const scene = '/api/buildings/' + bid + '/scenarios/' + scenario.id;
+    await page.goto('/viewer.html?bid=' + bid + '&sid=' + scenario.id);
+    await page.locator('#calculate-btn:not([disabled])').waitFor();
+    await page.locator('#fill-capacity').click();
+    const response = page.waitForResponse(r => r.url().endsWith('/simulate') && r.request().method() === 'POST');
+    await page.locator('#calculate-btn').click();
+    const run = await (await response).json();
+    assert.equal(run.result.totalPeople, 66);
+    assert.equal(run.result.evacuatedPeople, 66);
+    assert.equal(run.result.unreachablePeople, 0);
+    assert.equal(run.result.people.length, 66);
+    await page.locator('#result-section:not([hidden])').waitFor();
+    assert.match(await page.locator('#result-status').innerText(), /все заданные люди/);
+    await page.locator('#timeline').evaluate(el => { el.value = el.max; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    assert.match(await page.locator('#playback-stats').innerText(), /66/);
+    await page.locator('#reset-btn').click();
+    assert.equal(await page.locator('#timeline').inputValue(), '0');
+    await page.screenshot({ path: path.join(evidence, 'unified-semantic-desktop.png'), fullPage: true });
+    await page.reload();
+    await page.locator('#calculate-btn:not([disabled])').waitFor();
+    await page.locator('#run-select').selectOption(run.id);
+    await page.locator('#open-run-btn').click();
+    await page.locator('#result-section:not([hidden])').waitFor();
+    assert.match(await page.locator('#summary').innerText(), /66/);
+    const topology = await api('GET', scene + '/topology');
+    for (const exit of topology.passages.filter(p => p.kind === 'exit')) {
+      await page.locator('#blocked-list input').evaluateAll((inputs, id) => {
+        const input = inputs.find(i => i.dataset.connectionId === id); input.checked = true;
+      }, exit.id);
+    }
+    const blockedResponse = page.waitForResponse(r => r.url().endsWith('/simulate') && r.request().method() === 'POST');
+    await page.locator('#calculate-btn').click();
+    const blocked = await (await blockedResponse).json();
+    assert.equal(blocked.result.unreachablePeople, 66);
+    assert.equal(blocked.result.evacuatedPeople, 0);
+    await page.waitForFunction(() => document.querySelector('#result-status').textContent.includes('не завершена'));
     await page.setViewportSize({ width: 390, height: 844 });
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await page.screenshot({ path: path.join(evidence, 'unified-mobile.png'), fullPage: true });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'mobile horizontal overflow');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const originalRoomId = topology.nodes.find(n => n.kind === 'room').id.split('/').slice(1).join('/');
+    await api('PUT', '/api/buildings/' + bid + '/floors/' + floor.id, { name: 'Изменённый офис', level: 1,
+      svg: office.replaceAll(originalRoomId, originalRoomId + '_renamed'), vb: [0, 0, 1200, 800] });
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('#msg').textContent.includes('отсутствует в плане'));
+    await page.locator('#reset-settings-btn').click();
+    await page.locator('#calculate-btn:not([disabled])').waitFor();
+    assert.ok((await page.locator('#occupancy-list input').evaluateAll(inputs => inputs.map(input => Number(input.value)))).every(value => value === 0));
+    assert.ok(await page.locator('#run-select option').count() >= 3);
+    const rasterBuilding = await api('POST', '/api/buildings', { name: 'Два этажа с метками' });
+    const rb = '/api/buildings/' + rasterBuilding.id;
+    const rawSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" onload="window.svgExecuted=true"><rect width="200" height="120" fill="white"/><text x="12" y="108" font-size="10">Floor plan</text></svg>';
+    const lower = await api('POST', rb + '/floors', { name: 'Первый этаж', level: 1, svg: rawSvg, vb: [0, 0, 200, 120] });
+    const upper = await api('POST', rb + '/floors', { name: 'Второй этаж', level: 2, svg: rawSvg, vb: [0, 0, 200, 120] });
+    const rs = await api('POST', rb + '/scenarios', { name: 'По лестнице', params: { people: 8, speed: 1.3, scale: 20, stairTime: 4, exitFlow: 1, stairFlow: 1 } });
+    const rc = rb + '/scenarios/' + rs.id;
+    const stairLow = await api('POST', rc + '/marks', { floorId: lower.id, kind: 'stair', x: 44, y: 44, width: 1 });
+    const stairHigh = await api('POST', rc + '/marks', { floorId: upper.id, kind: 'stair', x: 124, y: 44, width: 1 });
+    await api('POST', rc + '/marks', { floorId: lower.id, kind: 'exit', x: 164, y: 44, width: 1 });
+    await api('POST', rc + '/marks', { floorId: upper.id, kind: 'spawn', x: 44, y: 44 });
+    await api('PUT', rc + '/simulation-settings', { occupancy: {}, blockedConnections: [], stairLinks: [{ fromMarkId: stairHigh.id, toMarkId: stairLow.id }] });
+    await page.goto('/viewer.html?bid=' + rasterBuilding.id + '&sid=' + rs.id);
+    await page.locator('#calculate-btn:not([disabled])').waitFor();
+    const rasterResponse = page.waitForResponse(r => r.url().endsWith('/simulate') && r.request().method() === 'POST');
+    await page.locator('#calculate-btn').click();
+    const raster = await (await rasterResponse).json();
+    assert.equal(raster.mode, 'raster');
+    assert.equal(raster.result.evacuatedPeople, 8);
+    assert.equal(raster.result.people.length, 8);
+    assert.ok(raster.result.people.every(person => person.timeline.some(s => s.kind === 'stairs')));
+    await page.locator('#result-section:not([hidden])').waitFor();
+    await page.locator('#floor-tabs button').last().click();
+    await page.locator('#go-btn').click();
+    await page.waitForTimeout(250);
+    await page.locator('#go-btn').click();
+    assert.equal(await page.evaluate(() => window.svgExecuted === true), false);
+    await page.screenshot({ path: path.join(evidence, 'unified-two-floors.png'), fullPage: true });
+    const other = await browser.newContext({ baseURL: base });
+    assert.equal((await other.request.get(scene + '/runs')).status(), 401);
+    await other.close();
     assert.deepEqual(errors, []);
-    checks.push('Мобильная ширина 390 px без горизонтального переполнения и ошибок JavaScript.');
-    console.log(JSON.stringify({ passed: checks.length, checks, bothExitTime, oneExitTime }, null, 2));
+    const results = { scenarios: ['registration and building UI', 'semantic Java calculation 66 people', 'saved run reload and seek/reset', 'blocked exits conserve 66 unreachable', 'mobile390', 'reset stale settings after plan edit', 'raster explicit two-floor Java playback', 'safe SVG and unauthenticated access'], semanticTime: run.result.evacuationTimeSeconds, rasterTime: raster.result.evacuationTimeSeconds, browserErrors: errors };
+    fs.writeFileSync(path.join(evidence, 'browser-smoke.json'), JSON.stringify(results, null, 2));
+    console.log(JSON.stringify(results));
+  } catch (error) {
+    await page.screenshot({ path: path.join(evidence, 'browser-failure.png'), fullPage: true }).catch(() => {});
+    throw error;
   } finally { await browser.close(); }
-})().catch(error => { console.error(error); process.exitCode = 1; });
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });
